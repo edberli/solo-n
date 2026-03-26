@@ -5,9 +5,11 @@ import { signInWithGoogle, signInGuest, signOutUser, subscribeToAuth } from '../
 interface AuthContextType {
   user: UserProfile | null;
   loading: boolean;
+  error: string | null;
   login: () => Promise<void>;
   loginGuest: () => Promise<void>;
   logout: () => Promise<void>;
+  clearError: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -15,6 +17,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = subscribeToAuth((u) => {
@@ -26,20 +29,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async () => {
     try {
+      setError(null);
       const loggedInUser = await signInWithGoogle();
       if (loggedInUser) setUser(loggedInUser);
-    } catch (error: any) {
-      console.error("Login failed", error);
-      alert(error.message || "登入失敗，請檢查配置或網絡。");
+    } catch (err: any) {
+      console.error("Login failed", err);
+      setError(err.message || "登入失敗，請檢查配置或網絡。");
     }
   };
 
   const loginGuest = async () => {
     try {
+        setError(null);
         const guest = await signInGuest();
         setUser(guest);
-    } catch (error) {
-        console.error("Guest login failed", error);
+    } catch (err: any) {
+        console.error("Guest login failed", err);
+        setError(err.message || "訪客登入失敗");
     }
   };
 
@@ -47,13 +53,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       await signOutUser();
       setUser(null);
-    } catch (error) {
-      console.error("Logout failed", error);
+    } catch (err) {
+      console.error("Logout failed", err);
     }
   };
 
+  const clearError = () => setError(null);
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, loginGuest, logout }}>
+    <AuthContext.Provider value={{ user, loading, error, login, loginGuest, logout, clearError }}>
       {children}
     </AuthContext.Provider>
   );
