@@ -80,5 +80,10 @@ service cloud.firestore {
       allow update: if isDocOwner() && uidNotModified() && isValidMealPlan(request.resource.data) && request.resource.data.createdAt == resource.data.createdAt;
       allow delete: if isDocOwner();
     }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow write: if isOwner(userId);
+    }
   }
 }

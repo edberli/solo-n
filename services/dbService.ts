@@ -230,7 +230,9 @@ const GUEST_USER: UserProfile = {
 
 export const signInGuest = async (): Promise<UserProfile> => {
   localStorage.setItem('auth_mode', 'guest');
-  return GUEST_USER;
+  const guestSettingsStr = localStorage.getItem('guest_settings');
+  const guestSettings = guestSettingsStr ? JSON.parse(guestSettingsStr) : undefined;
+  return { ...GUEST_USER, settings: guestSettings };
 };
 
 export const signInWithGoogle = async (): Promise<UserProfile> => {
