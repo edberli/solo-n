@@ -29,6 +29,10 @@ export const getAIConfig = (): AIConfig => {
       if (!parsed.moonshotModel || parsed.moonshotModel === 'moonshot-v1-k2.5' || parsed.moonshotModel === 'moonshot-v1-32k') {
         parsed.moonshotModel = 'kimi-k2.5';
       }
+      if (!parsed.geminiApiKey) {
+        // WARNING: Hardcoded API key for client-side demo purposes as requested.
+        parsed.geminiApiKey = process.env.GEMINI_API_KEY || 'AIzaSyArWNq_Uki7iU44AzEv33lDKaun7gGvwSQ';
+      }
       return parsed;
     }
   } catch (e) {
@@ -38,7 +42,8 @@ export const getAIConfig = (): AIConfig => {
   // Default config
   return {
     provider: AI_PROVIDERS.GEMINI,
-    geminiApiKey: process.env.GEMINI_API_KEY || '',
+    // WARNING: Hardcoded API key for client-side demo purposes as requested.
+    geminiApiKey: process.env.GEMINI_API_KEY || 'AIzaSyArWNq_Uki7iU44AzEv33lDKaun7gGvwSQ',
     bailianApiKey: '',
     bailianBaseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     moonshotApiKey: '',
