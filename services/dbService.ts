@@ -6,7 +6,7 @@ import { IS_DEMO_MODE } from "../constants";
 import { DietRecord, UserProfile } from "../types";
 
 export const mapCategory = (cat: string): string => {
-    const valid = ['主餐', '甜品', '小食', '飲品', '補充劑'];
+    const valid = ['主餐', '甜品', '小食', '飲品', '補充劑', '自訂餐單'];
     if (valid.includes(cat)) return cat;
     if (cat.includes('飲') || cat.includes('水') || cat.includes('茶') || cat.includes('啡') || cat.includes('奶') || cat.includes('酒')) return '飲品';
     if (cat.includes('甜') || cat.includes('糕') || cat.includes('糖') || cat.includes('冰')) return '甜品';
@@ -18,7 +18,8 @@ export const mapCategory = (cat: string): string => {
 // --- IndexedDB Configuration (Robust Local Storage) ---
 const DB_NAME = 'SmartDietDB';
 const STORE_NAME = 'diet_records';
-const DB_VERSION = 1;
+const MEAL_PLANS_STORE = 'meal_plans';
+const DB_VERSION = 2;
 
 // Helper to open DB with error handling
 const openDB = (): Promise<IDBDatabase> => {
@@ -40,6 +41,10 @@ const openDB = (): Promise<IDBDatabase> => {
         const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
         store.createIndex('timestamp', 'timestamp', { unique: false });
         store.createIndex('dateStr', 'dateStr', { unique: false });
+      }
+      if (!db.objectStoreNames.contains(MEAL_PLANS_STORE)) {
+        const store = db.createObjectStore(MEAL_PLANS_STORE, { keyPath: 'id' });
+        store.createIndex('userId', 'userId', { unique: false });
       }
     };
     
@@ -91,6 +96,54 @@ const idb = {
         });
     } catch (e) {
         console.error("IndexedDB Delete Error", e);
+        throw e;
+    }
+  }
+};
+
+const idbMealPlans = {
+  add: async (plan: any) => {
+    try {
+        const db = await openDB();
+        return new Promise<void>((resolve, reject) => {
+          const tx = db.transaction(MEAL_PLANS_STORE, 'readwrite');
+          const store = tx.objectStore(MEAL_PLANS_STORE);
+          const req = store.put(plan);
+          req.onsuccess = () => resolve();
+          req.onerror = () => reject(req.error);
+        });
+    } catch (e) {
+        console.error("IndexedDB MealPlans Add Error", e);
+        throw e;
+    }
+  },
+  getAll: async () => {
+    try {
+        const db = await openDB();
+        return new Promise<any[]>((resolve, reject) => {
+          const tx = db.transaction(MEAL_PLANS_STORE, 'readonly');
+          const store = tx.objectStore(MEAL_PLANS_STORE);
+          const req = store.getAll();
+          req.onsuccess = () => resolve(req.result || []);
+          req.onerror = () => reject(req.error);
+        });
+    } catch (e) {
+        console.error("IndexedDB MealPlans GetAll Error", e);
+        return [];
+    }
+  },
+  delete: async (id: string) => {
+    try {
+        const db = await openDB();
+        return new Promise<void>((resolve, reject) => {
+            const tx = db.transaction(MEAL_PLANS_STORE, 'readwrite');
+            const store = tx.objectStore(MEAL_PLANS_STORE);
+            const req = store.delete(id);
+            req.onsuccess = () => resolve();
+            req.onerror = () => reject(req.error);
+        });
+    } catch (e) {
+        console.error("IndexedDB MealPlans Delete Error", e);
         throw e;
     }
   }
@@ -148,25 +201,18 @@ export const clearLocalData = async (): Promise<void> => {
 
 
 // --- Firebase Configuration ---
-const firebaseConfig = {
-  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
-  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.REACT_APP_FIREBASE_APP_ID,
-};
+import firebaseConfig from '../firebase-applet-config.json';
 
 let auth: any;
 let db: any;
 let storage: any;
 
 // Only init Firebase if config exists and NOT in demo mode
-if (!IS_DEMO_MODE && process.env.REACT_APP_FIREBASE_API_KEY) {
+if (!IS_DEMO_MODE && firebaseConfig.apiKey) {
   try {
     const app = initializeApp(firebaseConfig);
     auth = getAuth(app);
-    db = getFirestore(app);
+    db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
     storage = getStorage(app);
   } catch (e) {
     console.warn("Firebase init failed, falling back to local mode", e);
@@ -242,6 +288,57 @@ export const subscribeToAuth = (callback: (user: UserProfile | null) => void) =>
 
 // --- Data Functions ---
 
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId: string | undefined;
+    email: string | undefined;
+    emailVerified: boolean | undefined;
+    isAnonymous: boolean | undefined;
+    tenantId: string | undefined;
+    providerInfo: {
+      providerId: string;
+      displayName: string | null;
+      email: string | null;
+      photoUrl: string | null;
+    }[];
+  }
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth?.currentUser?.uid,
+      email: auth?.currentUser?.email,
+      emailVerified: auth?.currentUser?.emailVerified,
+      isAnonymous: auth?.currentUser?.isAnonymous,
+      tenantId: auth?.currentUser?.tenantId,
+      providerInfo: auth?.currentUser?.providerData.map((provider: any) => ({
+        providerId: provider.providerId,
+        displayName: provider.displayName,
+        email: provider.email,
+        photoUrl: provider.photoURL
+      })) || []
+    },
+    operationType,
+    path
+  }
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
+
 export const saveDietRecord = async (record: Omit<DietRecord, 'id' | 'createdAt'>): Promise<void> => {
   const mode = localStorage.getItem('auth_mode');
   
@@ -271,8 +368,7 @@ export const saveDietRecord = async (record: Omit<DietRecord, 'id' | 'createdAt'
         createdAt: Timestamp.now()
       });
   } catch (error) {
-      console.error("Firebase save failed", error);
-      throw new Error("雲端儲存失敗，請檢查網絡或切換至本機模式");
+      handleFirestoreError(error, OperationType.CREATE, "diet_records");
   }
 };
 
@@ -291,8 +387,71 @@ export const deleteDietRecord = async (userId: string, recordId: string): Promis
         // In a full production app, you would also delete the object at record.imageUrl
         await deleteDoc(doc(db, "diet_records", recordId));
     } catch (error) {
-        console.error("Firebase delete failed", error);
-        throw new Error("刪除失敗，請檢查網絡");
+        handleFirestoreError(error, OperationType.DELETE, `diet_records/${recordId}`);
+    }
+};
+
+export const saveMealPlan = async (plan: Omit<MealPlan, 'id' | 'createdAt'>): Promise<void> => {
+  const mode = localStorage.getItem('auth_mode');
+  
+  if (mode === 'guest' || !db) {
+    const newPlan: MealPlan = {
+        ...plan,
+        id: `local-plan-${Date.now()}-${Math.random().toString(36).substr(2,5)}`,
+        createdAt: Date.now()
+    };
+    await idbMealPlans.add(newPlan);
+    return;
+  }
+
+  try {
+      await addDoc(collection(db, "meal_plans"), {
+        ...plan,
+        createdAt: Timestamp.now()
+      });
+  } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, "meal_plans");
+  }
+};
+
+export const getMealPlans = async (userId: string): Promise<MealPlan[]> => {
+  const mode = localStorage.getItem('auth_mode');
+
+  if (mode === 'guest' || !db) {
+    const all = await idbMealPlans.getAll();
+    return all.filter(p => p.userId === userId).sort((a, b) => b.createdAt - a.createdAt);
+  }
+
+  try {
+    const q = query(
+      collection(db, "meal_plans"),
+      where("userId", "==", userId),
+      orderBy("createdAt", "desc")
+    );
+
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as MealPlan[];
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, "meal_plans");
+    return [];
+  }
+};
+
+export const deleteMealPlan = async (userId: string, planId: string): Promise<void> => {
+    const mode = localStorage.getItem('auth_mode');
+
+    if (mode === 'guest' || !db) {
+        await idbMealPlans.delete(planId);
+        return;
+    }
+
+    try {
+        await deleteDoc(doc(db, "meal_plans", planId));
+    } catch (error) {
+        handleFirestoreError(error, OperationType.DELETE, `meal_plans/${planId}`);
     }
 };
 
@@ -307,22 +466,27 @@ export const getDietRecordsByDate = async (userId: string, dateStr: string): Pro
       .map(r => ({ ...r, category: mapCategory(r.category || '主餐') }));
   }
 
-  const q = query(
-    collection(db, "diet_records"),
-    where("userId", "==", userId),
-    where("dateStr", "==", dateStr),
-    orderBy("timestamp", "asc")
-  );
+  try {
+    const q = query(
+      collection(db, "diet_records"),
+      where("userId", "==", userId),
+      where("dateStr", "==", dateStr),
+      orderBy("timestamp", "asc")
+    );
 
-  const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(doc => {
-    const data = doc.data();
-    return {
-      id: doc.id,
-      ...data,
-      category: mapCategory(data.category || '主餐')
-    };
-  }) as DietRecord[];
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        category: mapCategory(data.category || '主餐')
+      };
+    }) as DietRecord[];
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, "diet_records");
+    return [];
+  }
 };
 
 export const getDietRecordsByRange = async (userId: string, startTimestamp: number, endTimestamp: number): Promise<DietRecord[]> => {
@@ -336,23 +500,28 @@ export const getDietRecordsByRange = async (userId: string, startTimestamp: numb
           .map(r => ({ ...r, category: mapCategory(r.category || '主餐') }));
     }
   
-    const q = query(
-        collection(db, "diet_records"),
-        where("userId", "==", userId),
-        where("timestamp", ">=", startTimestamp),
-        where("timestamp", "<=", endTimestamp),
-        orderBy("timestamp", "asc")
-      );
-    
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-            id: doc.id,
-            ...data,
-            category: mapCategory(data.category || '主餐')
-        };
-    }) as DietRecord[];
+    try {
+      const q = query(
+          collection(db, "diet_records"),
+          where("userId", "==", userId),
+          where("timestamp", ">=", startTimestamp),
+          where("timestamp", "<=", endTimestamp),
+          orderBy("timestamp", "asc")
+        );
+      
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+              id: doc.id,
+              ...data,
+              category: mapCategory(data.category || '主餐')
+          };
+      }) as DietRecord[];
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, "diet_records");
+      return [];
+    }
   };
 
 /**
@@ -383,24 +552,39 @@ const getBaseFoodName = (name: string): string => {
 export const getHistoryMenu = async (userId: string): Promise<{
     menu: Record<string, string[]>;
     templates: Record<string, Partial<DietRecord>[]>;
+    mealPlans: MealPlan[];
 }> => {
     const mode = localStorage.getItem('auth_mode');
     const ANALYZE_COUNT = 200; // Increased limit to find more variations
   
     let docs: DietRecord[] = [];
+    let mealPlans: MealPlan[] = [];
   
     if (mode === 'guest' || !db) {
       const all = await idb.getAll();
       docs = all.sort((a, b) => b.timestamp - a.timestamp).slice(0, ANALYZE_COUNT);
+      mealPlans = await idbMealPlans.getAll();
+      mealPlans = mealPlans.filter(p => p.userId === userId);
     } else {
-      const q = query(
-          collection(db, "diet_records"),
-          where("userId", "==", userId),
-          orderBy("timestamp", "desc"),
-          limit(ANALYZE_COUNT)
+      try {
+        const q = query(
+            collection(db, "diet_records"),
+            where("userId", "==", userId),
+            orderBy("timestamp", "desc"),
+            limit(ANALYZE_COUNT)
+          );
+        const snapshot = await getDocs(q);
+        docs = snapshot.docs.map(d => d.data() as DietRecord);
+        
+        const qPlans = query(
+            collection(db, "meal_plans"),
+            where("userId", "==", userId)
         );
-      const snapshot = await getDocs(q);
-      docs = snapshot.docs.map(d => d.data() as DietRecord);
+        const plansSnapshot = await getDocs(qPlans);
+        mealPlans = plansSnapshot.docs.map(d => ({ id: d.id, ...d.data() }) as MealPlan);
+      } catch (error) {
+        handleFirestoreError(error, OperationType.LIST, "diet_records/meal_plans");
+      }
     }
 
     // Processing:
@@ -470,7 +654,27 @@ export const getHistoryMenu = async (userId: string): Promise<{
         grouped[cat] = grouped[cat].slice(0, 10);
     });
 
-    return { menu: grouped, templates: templates };
+    // Inject Meal Plans
+    if (mealPlans.length > 0) {
+        if (!grouped['自訂餐單']) grouped['自訂餐單'] = [];
+        mealPlans.forEach(plan => {
+            const planName = plan.name || '未命名餐單';
+            if (!grouped['自訂餐單'].includes(planName)) {
+                grouped['自訂餐單'].push(planName);
+            }
+            if (!templates[planName]) templates[planName] = [];
+            
+            // Add the meal plan as a variation
+            templates[planName].push({
+                id: plan.id, // Include ID so we can delete it later
+                description: plan.description,
+                category: '自訂餐單',
+                notes: '從自訂餐單載入'
+            });
+        });
+    }
+
+    return { menu: grouped, templates: templates, mealPlans: mealPlans };
 };
 
 export const getMonthlyStats = async (userId: string, year: number, month: number): Promise<Record<string, number>> => {

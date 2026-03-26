@@ -35,6 +35,11 @@ export const Dashboard: React.FC = () => {
   const [expandedRecordId, setExpandedRecordId] = useState<string | null>(null);
   // Delete State: 'idle' | 'confirm' | 'deleting'
   const [deleteState, setDeleteState] = useState<'idle' | 'confirm' | 'deleting'>('idle');
+  const [loadError, setLoadError] = useState<Error | null>(null);
+
+  if (loadError) {
+      throw loadError;
+  }
 
   const dateStr = formatHKDate(selectedDate.getTime());
 
@@ -44,8 +49,9 @@ export const Dashboard: React.FC = () => {
     try {
       const data = await getDietRecordsByDate(user.uid, dateStr);
       setRecords(data);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to fetch records", error);
+      setLoadError(error);
     } finally {
       setLoading(false);
     }
@@ -58,8 +64,9 @@ export const Dashboard: React.FC = () => {
       const month = calendarMonth.getMonth();
       const stats = await getMonthlyStats(user.uid, year, month);
       setMonthlyStats(stats);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      setLoadError(e);
     }
   };
 
@@ -201,8 +208,8 @@ export const Dashboard: React.FC = () => {
         renderCalendar()
       ) : (
         /* Date Navigator */
-        <div className="flex items-center justify-between glass-panel p-2 rounded-full">
-          <button onClick={() => changeDate(-1)} className="p-3 hover:bg-surface-hover rounded-full transition-colors text-secondary hover:text-primary">
+        <div className="flex items-center justify-between bg-black text-white p-2 rounded-full">
+          <button onClick={() => changeDate(-1)} className="p-3 hover:bg-white/10 rounded-full transition-colors text-white/70 hover:text-white">
             <ChevronLeft size={20} strokeWidth={1.5} />
           </button>
           
@@ -213,12 +220,12 @@ export const Dashboard: React.FC = () => {
                  setCalendarMonth(selectedDate);
              }}
           >
-            <h2 className="font-medium text-lg flex items-center gap-2 tracking-widest text-primary">
+            <h2 className="font-medium text-lg flex items-center gap-2 tracking-widest text-white">
                 {dateStr}
             </h2>
           </div>
 
-          <button onClick={() => changeDate(1)} className="p-3 hover:bg-surface-hover rounded-full transition-colors text-secondary hover:text-primary">
+          <button onClick={() => changeDate(1)} className="p-3 hover:bg-white/10 rounded-full transition-colors text-white/70 hover:text-white">
             <ChevronRight size={20} strokeWidth={1.5} />
           </button>
         </div>
@@ -226,9 +233,9 @@ export const Dashboard: React.FC = () => {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 gap-3">
-        <div className="glass-panel p-4 rounded-2xl flex flex-col justify-between h-24 border-l-2 border-l-accent">
-          <p className="font-medium text-[10px] uppercase tracking-widest text-secondary">Calories</p>
-          <p className="text-2xl font-light tracking-tight text-primary">{Math.round(totalCalories)} <span className="text-[10px] font-medium text-secondary tracking-widest">KCAL</span></p>
+        <div className="bg-[#b3121C] text-white p-4 rounded-2xl flex flex-col justify-between h-24">
+          <p className="font-medium text-[10px] uppercase tracking-widest text-white/80">Calories</p>
+          <p className="text-2xl font-light tracking-tight text-white">{Math.round(totalCalories)} <span className="text-[10px] font-medium text-white/80 tracking-widest">KCAL</span></p>
         </div>
         <div className="glass-panel p-4 rounded-2xl flex flex-col justify-between h-24 border-l-2 border-l-secondary">
           <p className="font-medium text-[10px] uppercase tracking-widest text-secondary">Protein</p>
@@ -256,9 +263,9 @@ export const Dashboard: React.FC = () => {
             <Loader2 className="animate-spin text-accent" size={32} strokeWidth={1.5} />
           </div>
         ) : records.length === 0 ? (
-          <div className="text-center py-16 text-secondary glass-panel rounded-2xl border border-dashed border-border-color">
-            <p className="font-light text-lg tracking-widest">NO RECORDS</p>
-            <p className="text-xs mt-2 opacity-60 tracking-wider">Tap + to add an entry</p>
+          <div className="text-center py-16 bg-black text-white rounded-2xl border border-dashed border-border-color">
+            <p className="font-light text-lg tracking-widest text-white">NO RECORDS</p>
+            <p className="text-xs mt-2 opacity-80 tracking-wider text-white">Tap + to add an entry</p>
           </div>
         ) : (
           records.map((record) => {

@@ -8,6 +8,7 @@ import { AddEntry } from './pages/AddEntry';
 import { Reports } from './pages/Reports';
 import { Settings } from './pages/Settings';
 import { Loader2 } from 'lucide-react';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
@@ -70,13 +71,15 @@ const AppRoutes = () => {
 
 const App: React.FC = () => {
   return (
-    <AuthProvider>
-      <HashRouter>
-        <Layout>
-            <AppRoutes />
-        </Layout>
-      </HashRouter>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <HashRouter>
+          <Layout>
+              <AppRoutes />
+          </Layout>
+        </HashRouter>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 };
 

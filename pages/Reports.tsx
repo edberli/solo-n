@@ -12,6 +12,11 @@ export const Reports: React.FC = () => {
   const [records, setRecords] = useState<DietRecord[]>([]);
   const [stats, setStats] = useState<WeeklyStats | null>(null);
   const [chartData, setChartData] = useState<any[]>([]);
+  const [loadError, setLoadError] = useState<Error | null>(null);
+
+  if (loadError) {
+      throw loadError;
+  }
 
   useEffect(() => {
     if(!user) return;
@@ -20,9 +25,14 @@ export const Reports: React.FC = () => {
       const start = currentWeekStart.getTime();
       const end = start + (7 * 24 * 60 * 60 * 1000) - 1; // End of week
       
-      const data = await getDietRecordsByRange(user.uid, start, end);
-      setRecords(data);
-      calculateStats(data, currentWeekStart);
+      try {
+        const data = await getDietRecordsByRange(user.uid, start, end);
+        setRecords(data);
+        calculateStats(data, currentWeekStart);
+      } catch (error: any) {
+        console.error("Failed to fetch weekly data", error);
+        setLoadError(error);
+      }
     };
 
     fetchWeekData();

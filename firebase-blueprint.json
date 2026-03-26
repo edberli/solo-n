@@ -1,0 +1,72 @@
+{
+  "entities": {
+    "NutritionData": {
+      "title": "NutritionData",
+      "description": "Nutritional information",
+      "type": "object",
+      "properties": {
+        "calories": { "type": "number" },
+        "protein": { "type": "number" },
+        "carbs": { "type": "number" },
+        "fat": { "type": "number" },
+        "fiber": { "type": "number" }
+      },
+      "required": ["calories", "protein", "carbs", "fat", "fiber"]
+    },
+    "DietRecord": {
+      "title": "DietRecord",
+      "description": "A user's diet record",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "timestamp": { "type": "number" },
+        "dateStr": { "type": "string" },
+        "mealType": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "nutrition": { "$ref": "#/entities/NutritionData" },
+        "confidence": { "type": "number" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "object" }
+      },
+      "required": ["userId", "timestamp", "dateStr", "mealType", "description", "nutrition", "confidence", "notes", "createdAt"]
+    },
+    "MealPlanItem": {
+      "title": "MealPlanItem",
+      "description": "An item in a meal plan",
+      "type": "object",
+      "properties": {
+        "description": { "type": "string" },
+        "nutrition": { "$ref": "#/entities/NutritionData" },
+        "category": { "type": "string" },
+        "mealType": { "type": "string" },
+        "notes": { "type": "string" }
+      },
+      "required": ["description", "nutrition"]
+    },
+    "MealPlan": {
+      "title": "MealPlan",
+      "description": "A user's custom meal plan",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "items": { "type": "array", "items": { "$ref": "#/entities/MealPlanItem" } },
+        "createdAt": { "type": "object" }
+      },
+      "required": ["userId", "name", "description", "createdAt"]
+    }
+  },
+  "firestore": {
+    "diet_records/{recordId}": {
+      "schema": { "$ref": "#/entities/DietRecord" },
+      "description": "Stores user diet records"
+    },
+    "meal_plans/{planId}": {
+      "schema": { "$ref": "#/entities/MealPlan" },
+      "description": "Stores user custom meal plans"
+    }
+  }
+}

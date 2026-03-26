@@ -2,11 +2,11 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { analyzeFood } from '../services/aiService';
-import { saveDietRecord, getHistoryMenu } from '../services/dbService';
+import { saveDietRecord, getHistoryMenu, saveMealPlan } from '../services/dbService';
 import { getSheetConfig, syncToAppsScript } from '../services/googleSheetsService';
 import { fileToBase64, formatHKDate, formatHKDateTime } from '../utils';
 import { DietRecord, LoadingState, NutritionData, MealType } from '../types';
-import { Camera, Check, Loader2, AlertTriangle, X, Clock, Trash2, Plus, Edit2, Save, Sparkles, Utensils, Hash, Tag, Zap, BrainCircuit, RefreshCw, CopyPlus, ArrowRight, PenTool, Scale, Info } from 'lucide-react';
+import { Camera, Check, Loader2, AlertTriangle, X, Clock, Trash2, Plus, Edit2, Save, Sparkles, Utensils, Hash, Tag, Zap, BrainCircuit, RefreshCw, CopyPlus, ArrowRight, PenTool, Scale, Info, BookmarkPlus } from 'lucide-react';
 
 type CategoryKey = string;
 
@@ -33,6 +33,7 @@ export const AddEntry: React.FC = () => {
   const [foodTemplates, setFoodTemplates] = useState<Record<string, Partial<DietRecord>[]>>({});
   const [categories, setCategories] = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [mealPlans, setMealPlans] = useState<any[]>([]);
 
   // Selection Modal State
   const [pendingHistoryItem, setPendingHistoryItem] = useState<Partial<DietRecord> | null>(null);
@@ -43,11 +44,21 @@ export const AddEntry: React.FC = () => {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<Partial<DietRecord>>({});
 
-  useEffect(() => {
+  // Meal Plan State
+  const [showMealPlanModal, setShowMealPlanModal] = useState(false);
+  const [mealPlanName, setMealPlanName] = useState('');
+  const [loadError, setLoadError] = useState<Error | null>(null);
+
+  if (loadError) {
+      throw loadError;
+  }
+
+  const loadHistory = () => {
     if (user) {
-        getHistoryMenu(user.uid).then(({ menu, templates }) => {
+        getHistoryMenu(user.uid).then(({ menu, templates, mealPlans }) => {
             setHistoryMenu(menu);
             setFoodTemplates(templates);
+            setMealPlans(mealPlans);
             
             // Sort categories: put '未分類' last
             const cats = Object.keys(menu).sort((a, b) => {
@@ -56,9 +67,16 @@ export const AddEntry: React.FC = () => {
                 return a.localeCompare(b);
             });
             setCategories(cats);
-            if (cats.length > 0) setSelectedCategory(cats[0]);
+            if (cats.length > 0 && !selectedCategory) setSelectedCategory(cats[0]);
+        }).catch(error => {
+            console.error("Failed to load history menu:", error);
+            setLoadError(error);
         });
     }
+  };
+
+  useEffect(() => {
+    loadHistory();
   }, [user]);
 
   const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -122,6 +140,36 @@ export const AddEntry: React.FC = () => {
     setPendingHistoryItem(null);
   };
 
+  const handleLoadMealPlan = () => {
+    if (!pendingHistoryItem || !pendingHistoryItem.id) return;
+    
+    const plan = mealPlans.find(p => p.id === pendingHistoryItem.id);
+    if (plan && plan.items) {
+        const newRecords = plan.items.map((item: any) => ({
+            ...item,
+            notes: '📜 引用自自訂餐單'
+        }));
+        setAnalysisResults(prev => [...prev, ...newRecords]);
+        if (status === 'idle') setStatus('success');
+    } else if (plan) {
+        // Fallback for old meal plans without items
+        setTextInput(prev => {
+            const val = prev.trim();
+            if (!val) return plan.description;
+            if (val.includes(plan.description)) return val;
+            const lastChar = val.slice(-1);
+            if (['、', ',', '，', ' ', '+'].includes(lastChar)) {
+                return val + plan.description;
+            }
+            return `${val}、${plan.description}`;
+        });
+        setTimeout(() => {
+            textInputRef.current?.focus();
+        }, 100);
+    }
+    setPendingHistoryItem(null);
+  };
+
   // Step 2b: User chooses "Modify" (Fill input for AI)
   const confirmModify = () => {
       if (!pendingHistoryItem) return;
@@ -149,6 +197,33 @@ export const AddEntry: React.FC = () => {
       setTimeout(() => {
           textInputRef.current?.focus();
       }, 100);
+  };
+
+  const handleSaveMealPlan = async () => {
+    if (!user || analysisResults.length === 0 || !mealPlanName.trim()) return;
+    try {
+      const itemsToSave = analysisResults.map(item => ({
+        description: item.description || '',
+        nutrition: item.nutrition!,
+        category: item.category,
+        mealType: item.mealType,
+        notes: item.notes
+      }));
+
+      await saveMealPlan({
+        userId: user.uid,
+        name: mealPlanName.trim(),
+        description: itemsToSave.map(i => i.description).join('、'),
+        items: itemsToSave
+      });
+      setShowMealPlanModal(false);
+      setMealPlanName('');
+      loadHistory(); // Reload history to show the new meal plan
+      setSelectedCategory('自訂餐單'); // Switch to the custom meal plan category
+    } catch (e: any) {
+      console.error(e);
+      alert(e.message || '儲存餐單失敗');
+    }
   };
 
   const handleAnalyze = async () => {
@@ -304,8 +379,8 @@ export const AddEntry: React.FC = () => {
       </div>
 
       {/* 1. Date Time Picker */}
-      <div className="glass-panel p-5 rounded-2xl">
-        <label className="block text-[10px] font-medium text-secondary uppercase tracking-widest mb-2">Time</label>
+      <div className="bg-black p-5 rounded-2xl">
+        <label className="block text-[10px] font-medium text-white uppercase tracking-widest mb-2">Time</label>
         <input 
           type="datetime-local" 
           value={selectedDate}
@@ -315,7 +390,7 @@ export const AddEntry: React.FC = () => {
       </div>
 
       {/* 2. Input Section */}
-      <div className="glass-panel p-5 rounded-2xl space-y-5">
+      <div className="bg-surface p-5 rounded-2xl space-y-5">
         
         {/* Model Selection Toggle */}
         <div className="bg-bg-dark p-1 rounded-xl flex font-medium text-sm border border-border-color">
@@ -323,22 +398,22 @@ export const AddEntry: React.FC = () => {
                 onClick={() => setAnalysisMode('fast')}
                 className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg transition-all text-xs tracking-widest uppercase ${
                     analysisMode === 'fast' 
-                    ? 'bg-surface text-primary shadow-md' 
+                    ? 'bg-accent text-white shadow-md' 
                     : 'text-secondary hover:text-primary'
                 }`}
             >
-                <Zap size={14} className={analysisMode === 'fast' ? "text-accent" : ""} strokeWidth={1.5} />
+                <Zap size={14} className={analysisMode === 'fast' ? "text-white" : ""} strokeWidth={1.5} />
                 Fast
             </button>
             <button 
                 onClick={() => setAnalysisMode('pro')}
                 className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg transition-all text-xs tracking-widest uppercase ${
                     analysisMode === 'pro' 
-                    ? 'bg-surface text-primary shadow-md' 
+                    ? 'bg-accent text-white shadow-md' 
                     : 'text-secondary hover:text-primary'
                 }`}
             >
-                <BrainCircuit size={14} strokeWidth={1.5} />
+                <BrainCircuit size={14} className={analysisMode === 'pro' ? "text-white" : ""} strokeWidth={1.5} />
                 Pro
             </button>
         </div>
@@ -388,17 +463,41 @@ export const AddEntry: React.FC = () => {
 
                         {/* Grid Items */}
                         {selectedCategory && historyMenu[selectedCategory] && (
-                             <div className="mt-3 grid grid-cols-2 gap-2">
-                                {historyMenu[selectedCategory].map((item, idx) => (
-                                    <button
-                                        key={idx}
-                                        onClick={() => handleHistoryItemClick(item)}
-                                        className="bg-bg-dark hover:bg-surface border border-border-color text-primary text-xs font-medium py-3 px-2 rounded-xl transition-all truncate flex items-center justify-center gap-2 group"
-                                    >
-                                        <CopyPlus size={12} className="text-secondary group-hover:text-accent transition-colors" strokeWidth={1.5} />
-                                        {item}
-                                    </button>
-                                ))}
+                             <div className="mt-3 flex flex-col gap-2">
+                                <div className="grid grid-cols-2 gap-2">
+                                    {historyMenu[selectedCategory].slice(0, 4).map((item, idx) => (
+                                        <button
+                                            key={idx}
+                                            onClick={() => handleHistoryItemClick(item)}
+                                            className="bg-bg-dark hover:bg-surface border border-border-color text-primary text-xs font-medium py-3 px-2 rounded-xl transition-all truncate flex items-center justify-center gap-2 group"
+                                        >
+                                            <CopyPlus size={12} className="text-secondary group-hover:text-accent transition-colors" strokeWidth={1.5} />
+                                            {item}
+                                        </button>
+                                    ))}
+                                </div>
+                                {historyMenu[selectedCategory].length > 4 && (
+                                    <div className="relative mt-1">
+                                        <select
+                                            className="w-full bg-bg-dark border border-border-color text-primary text-xs font-medium py-3 px-4 rounded-xl appearance-none outline-none focus:border-accent transition-colors cursor-pointer"
+                                            onChange={(e) => {
+                                                if (e.target.value) {
+                                                    handleHistoryItemClick(e.target.value);
+                                                    e.target.selectedIndex = 0; // reset after selection
+                                                }
+                                            }}
+                                            defaultValue=""
+                                        >
+                                            <option value="" disabled>更多 {selectedCategory} 記錄...</option>
+                                            {historyMenu[selectedCategory].slice(4).map((item, idx) => (
+                                                <option key={idx} value={item}>{item}</option>
+                                            ))}
+                                        </select>
+                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-secondary">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </>
@@ -444,9 +543,9 @@ export const AddEntry: React.FC = () => {
           <button
             onClick={handleAnalyze}
             disabled={(!textInput && !selectedImage)}
-            className="w-full bg-primary text-bg-dark py-4 rounded-xl font-medium text-sm uppercase tracking-widest hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex justify-center items-center gap-2"
+            className="w-full bg-primary text-white py-4 rounded-xl font-medium text-sm uppercase tracking-widest hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex justify-center items-center gap-2"
           >
-            <Sparkles size={16} className="text-bg-dark" strokeWidth={1.5} />
+            <Sparkles size={16} className="text-white" strokeWidth={1.5} />
             Analyze ({analysisMode === 'fast' ? 'Fast' : 'Pro'})
           </button>
         )}
@@ -464,7 +563,17 @@ export const AddEntry: React.FC = () => {
         <div className="animate-fade-in space-y-6 mt-8">
             
             <div className="flex justify-between items-end px-1 border-b border-border-color pb-3">
-                <h3 className="font-medium text-sm text-secondary uppercase tracking-widest">Review ({analysisResults.length})</h3>
+                <div className="flex items-center gap-3">
+                    <h3 className="font-medium text-sm text-secondary uppercase tracking-widest">Review ({analysisResults.length})</h3>
+                    <button
+                      onClick={() => setShowMealPlanModal(true)}
+                      className="bg-bg-dark border border-border-color text-primary px-3 py-1.5 rounded-lg font-medium text-[10px] uppercase tracking-widest hover:bg-surface transition-all flex items-center gap-1.5"
+                      title="儲存為自訂餐單"
+                    >
+                      <BookmarkPlus size={12} strokeWidth={1.5} />
+                      Save Plan
+                    </button>
+                </div>
                 <div className="text-right text-[10px] font-medium text-secondary tracking-widest uppercase space-y-1">
                     <div>CALORIES: <span className="text-primary ml-1">{Math.round(totalCalories)}</span></div>
                     <div>PROTEIN: <span className="text-primary ml-1">{Math.round(totalProtein)}g</span></div>
@@ -585,20 +694,22 @@ export const AddEntry: React.FC = () => {
                         >
                             <div className="overflow-hidden">
                                 <div className="font-medium text-sm text-primary truncate">{variant.description}</div>
-                                <div className="flex gap-3 mt-2 flex-wrap">
-                                    <span className="text-[10px] text-secondary tracking-widest uppercase">
-                                        <span className="text-primary">{variant.nutrition?.calories}</span> kcal
-                                    </span>
-                                    <span className="text-[10px] text-secondary tracking-widest uppercase">
-                                        <span className="text-primary">{variant.nutrition?.protein}</span>g prot
-                                    </span>
-                                    <span className="text-[10px] text-secondary tracking-widest uppercase">
-                                        <span className="text-primary">{variant.nutrition?.carbs || 0}</span>g carb
-                                    </span>
-                                    <span className="text-[10px] text-secondary tracking-widest uppercase">
-                                        <span className="text-primary">{variant.nutrition?.fat || 0}</span>g fat
-                                    </span>
-                                </div>
+                                {variant.nutrition && (
+                                    <div className="flex gap-3 mt-2 flex-wrap">
+                                        <span className="text-[10px] text-secondary tracking-widest uppercase">
+                                            <span className="text-primary">{variant.nutrition.calories}</span> kcal
+                                        </span>
+                                        <span className="text-[10px] text-secondary tracking-widest uppercase">
+                                            <span className="text-primary">{variant.nutrition.protein}</span>g prot
+                                        </span>
+                                        <span className="text-[10px] text-secondary tracking-widest uppercase">
+                                            <span className="text-primary">{variant.nutrition.carbs || 0}</span>g carb
+                                        </span>
+                                        <span className="text-[10px] text-secondary tracking-widest uppercase">
+                                            <span className="text-primary">{variant.nutrition.fat || 0}</span>g fat
+                                        </span>
+                                    </div>
+                                )}
                             </div>
                             <div className="text-secondary group-hover:text-accent transition-colors">
                                 <ArrowRight size={16} strokeWidth={1.5} />
@@ -615,33 +726,76 @@ export const AddEntry: React.FC = () => {
           <div className="fixed inset-0 bg-bg-dark/90 z-50 flex items-center justify-center p-4 animate-fade-in backdrop-blur-md">
              <div className="bg-surface rounded-3xl w-full max-w-sm border border-border-color shadow-2xl flex flex-col overflow-hidden">
                 <div className="p-5 border-b border-border-color flex justify-between items-center">
-                    <h3 className="font-medium text-sm text-secondary uppercase tracking-widest">History Item</h3>
+                    <h3 className="font-medium text-sm text-secondary uppercase tracking-widest">
+                        {pendingHistoryItem.category === '自訂餐單' ? 'Custom Meal Plan' : 'History Item'}
+                    </h3>
                     <button onClick={() => setPendingHistoryItem(null)} className="p-2 rounded-full text-secondary hover:text-primary hover:bg-surface-hover transition-colors">
                         <X size={20} strokeWidth={1.5} />
                     </button>
                 </div>
                 <div className="p-6 text-center">
                     <h4 className="text-xl font-medium text-primary mb-3">{pendingHistoryItem.description}</h4>
-                    <div className="text-xs text-secondary tracking-widest uppercase mb-8 flex justify-center gap-4">
-                        <span><span className="text-primary">{pendingHistoryItem.nutrition?.calories}</span> kcal</span>
-                        <span><span className="text-primary">{pendingHistoryItem.nutrition?.protein}</span>g prot</span>
-                    </div>
+                    {pendingHistoryItem.nutrition ? (
+                        <div className="text-xs text-secondary tracking-widest uppercase mb-8 flex justify-center gap-4">
+                            <span><span className="text-primary">{pendingHistoryItem.nutrition.calories}</span> kcal</span>
+                            <span><span className="text-primary">{pendingHistoryItem.nutrition.protein}</span>g prot</span>
+                        </div>
+                    ) : pendingHistoryItem.category === '自訂餐單' && pendingHistoryItem.id && mealPlans.find(p => p.id === pendingHistoryItem.id)?.items ? (
+                        <div className="text-xs text-secondary tracking-widest uppercase mb-8 flex justify-center gap-4">
+                            <span><span className="text-primary">{Math.round(mealPlans.find(p => p.id === pendingHistoryItem.id)!.items.reduce((sum: number, item: any) => sum + (item.nutrition?.calories || 0), 0))}</span> kcal</span>
+                            <span><span className="text-primary">{Math.round(mealPlans.find(p => p.id === pendingHistoryItem.id)!.items.reduce((sum: number, item: any) => sum + (item.nutrition?.protein || 0), 0))}</span>g prot</span>
+                        </div>
+                    ) : null}
                     
                     <div className="space-y-3">
-                        <button 
-                            onClick={confirmDirectAdd}
-                            className="w-full bg-accent text-bg-dark py-3.5 rounded-xl font-medium text-sm uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-accent/90 transition-all"
-                        >
-                            <ArrowRight size={16} strokeWidth={1.5} />
-                            Use Directly
-                        </button>
-                         <button 
-                            onClick={confirmModify}
-                            className="w-full bg-bg-dark border border-border-color text-primary py-3.5 rounded-xl font-medium text-sm uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-surface-hover transition-all"
-                        >
-                            <PenTool size={16} strokeWidth={1.5} />
-                            Modify & Analyze
-                        </button>
+                        {pendingHistoryItem.category === '自訂餐單' ? (
+                            <button 
+                                onClick={handleLoadMealPlan}
+                                className="w-full bg-accent text-bg-dark py-3.5 rounded-xl font-medium text-sm uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-accent/90 transition-all"
+                            >
+                                <ArrowRight size={16} strokeWidth={1.5} />
+                                Load Meal Plan
+                            </button>
+                        ) : (
+                            <>
+                                {pendingHistoryItem.nutrition && (
+                                    <button 
+                                        onClick={confirmDirectAdd}
+                                        className="w-full bg-accent text-bg-dark py-3.5 rounded-xl font-medium text-sm uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-accent/90 transition-all"
+                                    >
+                                        <ArrowRight size={16} strokeWidth={1.5} />
+                                        Use Directly
+                                    </button>
+                                )}
+                                <button 
+                                    onClick={confirmModify}
+                                    className={`w-full ${!pendingHistoryItem.nutrition ? 'bg-accent text-bg-dark hover:bg-accent/90' : 'bg-bg-dark border border-border-color text-primary hover:bg-surface-hover'} py-3.5 rounded-xl font-medium text-sm uppercase tracking-widest flex items-center justify-center gap-2 transition-all`}
+                                >
+                                    <PenTool size={16} strokeWidth={1.5} />
+                                    Modify & Analyze
+                                </button>
+                            </>
+                        )}
+                        {pendingHistoryItem.category === '自訂餐單' && pendingHistoryItem.id && (
+                            <button 
+                                onClick={async () => {
+                                    if (window.confirm('確定要刪除這個自訂餐單嗎？')) {
+                                        try {
+                                            const { deleteMealPlan } = await import('../services/dbService');
+                                            await deleteMealPlan(user!.uid, pendingHistoryItem.id!);
+                                            setPendingHistoryItem(null);
+                                            loadHistory();
+                                        } catch (e) {
+                                            alert('刪除失敗');
+                                        }
+                                    }
+                                }}
+                                className="w-full bg-red-500/10 border border-red-500/20 text-red-500 py-3.5 rounded-xl font-medium text-sm uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-red-500/20 transition-all mt-4"
+                            >
+                                <Trash2 size={16} strokeWidth={1.5} />
+                                Delete Plan
+                            </button>
+                        )}
                     </div>
                 </div>
              </div>
@@ -765,6 +919,62 @@ export const AddEntry: React.FC = () => {
                       >
                           <Save size={16} strokeWidth={1.5} />
                           Update
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* Save Meal Plan Modal */}
+      {showMealPlanModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+              <div className="bg-surface rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl border border-border-color flex flex-col max-h-[90vh]">
+                  <div className="p-5 border-b border-border-color flex justify-between items-center bg-bg-dark sticky top-0 z-10">
+                      <h3 className="font-medium text-primary uppercase tracking-widest text-sm flex items-center gap-2">
+                          <BookmarkPlus size={16} className="text-accent" strokeWidth={1.5} />
+                          Save Meal Plan
+                      </h3>
+                      <button onClick={() => setShowMealPlanModal(false)} className="text-secondary hover:text-primary transition-colors p-1">
+                          <X size={18} strokeWidth={1.5} />
+                      </button>
+                  </div>
+                  <div className="p-5 overflow-y-auto custom-scrollbar space-y-5">
+                      <div>
+                          <label className="block text-[10px] font-medium text-secondary uppercase tracking-widest mb-2">Meal Plan Name</label>
+                          <input 
+                              type="text"
+                              value={mealPlanName}
+                              onChange={(e) => setMealPlanName(e.target.value)}
+                              placeholder="e.g. 健身餐A, 早餐組合1"
+                              className="w-full bg-bg-dark border border-border-color rounded-xl p-3 font-medium text-primary focus:border-accent outline-none transition-colors"
+                              autoFocus
+                          />
+                      </div>
+                      <div>
+                          <label className="block text-[10px] font-medium text-secondary uppercase tracking-widest mb-2">Content</label>
+                          <div className="w-full bg-bg-dark border border-border-color rounded-xl p-4 text-sm text-secondary font-medium max-h-40 overflow-y-auto custom-scrollbar">
+                              <ul className="list-disc pl-4 space-y-1">
+                                  {analysisResults.map((item, idx) => (
+                                      <li key={idx} className="truncate">{item.description}</li>
+                                  ))}
+                              </ul>
+                          </div>
+                      </div>
+                  </div>
+                  <div className="p-5 border-t border-border-color flex gap-3 bg-surface">
+                      <button 
+                          onClick={() => setShowMealPlanModal(false)}
+                          className="flex-1 py-3.5 bg-bg-dark text-secondary border border-border-color hover:text-primary rounded-xl font-medium text-sm tracking-widest uppercase transition-colors"
+                      >
+                          Cancel
+                      </button>
+                      <button 
+                          onClick={handleSaveMealPlan}
+                          disabled={!mealPlanName.trim()}
+                          className="flex-1 py-3.5 bg-primary text-bg-dark rounded-xl font-medium text-sm tracking-widest uppercase hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex justify-center items-center gap-2"
+                      >
+                          <Save size={16} strokeWidth={1.5} />
+                          Save
                       </button>
                   </div>
               </div>

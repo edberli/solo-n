@@ -47,4 +47,21 @@ export interface WeeklyStats {
   insight: string;
 }
 
+export interface MealPlanItem {
+  description: string;
+  nutrition: NutritionData;
+  category?: string;
+  mealType?: MealType;
+  notes?: string;
+}
+
+export interface MealPlan {
+  id: string;
+  userId: string;
+  name: string; // e.g., "健身餐A"
+  description: string; // e.g., "雞胸肉 200g, 白飯 1碗, 西蘭花 100g"
+  items?: MealPlanItem[]; // The actual parsed items
+  createdAt: number;
+}
+
 export type LoadingState = 'idle' | 'analyzing' | 'saving' | 'syncing' | 'success' | 'error';

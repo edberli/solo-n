@@ -1,7 +1,8 @@
 // In a real app, these would come from process.env
 // For this demo structure, we check if they exist.
+import firebaseConfig from './firebase-applet-config.json';
 
-export const IS_DEMO_MODE = !process.env.REACT_APP_FIREBASE_API_KEY;
+export const IS_DEMO_MODE = !firebaseConfig.apiKey;
 
 export const HK_TIMEZONE = 'Asia/Hong_Kong';
 

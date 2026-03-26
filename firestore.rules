@@ -1,0 +1,84 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+    function uidUnchanged() {
+      return !('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid;
+    }
+    function uidNotModified() {
+      return !('userId' in request.resource.data) || request.resource.data.userId == resource.data.userId;
+    }
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+    function isValidNutrition(nutrition) {
+      return nutrition is map &&
+             nutrition.keys().hasAll(['calories', 'protein', 'carbs', 'fat', 'fiber']) &&
+             nutrition.calories is number && nutrition.calories >= 0 &&
+             nutrition.protein is number && nutrition.protein >= 0 &&
+             nutrition.carbs is number && nutrition.carbs >= 0 &&
+             nutrition.fat is number && nutrition.fat >= 0 &&
+             nutrition.fiber is number && nutrition.fiber >= 0;
+    }
+    function isValidDietRecord(data) {
+      return hasRequiredFields(['userId', 'timestamp', 'dateStr', 'mealType', 'description', 'nutrition', 'confidence', 'notes', 'createdAt']) &&
+             data.userId is string && data.userId.size() > 0 && data.userId.size() < 100 &&
+             data.timestamp is number &&
+             data.dateStr is string && data.dateStr.size() == 10 &&
+             data.mealType is string && data.mealType.size() > 0 && data.mealType.size() < 50 &&
+             data.description is string && data.description.size() <= 2000 &&
+             (!('category' in data) || (data.category is string && data.category.size() <= 100)) &&
+             (!('imageUrl' in data) || data.imageUrl == null || (data.imageUrl is string && data.imageUrl.size() <= 2000)) &&
+             isValidNutrition(data.nutrition) &&
+             data.confidence is number && data.confidence >= 0 && data.confidence <= 1 &&
+             data.notes is string && data.notes.size() <= 2000 &&
+             data.createdAt is timestamp;
+    }
+    function isValidMealPlanItem(item) {
+      return item is map &&
+             item.keys().hasAll(['description', 'nutrition']) &&
+             item.description is string && item.description.size() <= 2000 &&
+             isValidNutrition(item.nutrition) &&
+             (!('category' in item) || (item.category is string && item.category.size() <= 100)) &&
+             (!('mealType' in item) || (item.mealType is string && item.mealType.size() <= 50)) &&
+             (!('notes' in item) || (item.notes is string && item.notes.size() <= 2000));
+    }
+    function isValidMealPlan(data) {
+      return hasRequiredFields(['userId', 'name', 'description', 'createdAt']) &&
+             data.userId is string && data.userId.size() > 0 && data.userId.size() < 100 &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             data.description is string && data.description.size() <= 5000 &&
+             (!('items' in data) || (data.items is list && data.items.size() <= 100)) &&
+             data.createdAt is timestamp;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+    match /diet_records/{recordId} {
+      allow read: if isDocOwner() || (isAuthenticated() && request.auth.uid == request.query.userId);
+      allow create: if isAuthenticated() && uidUnchanged() && isValidDietRecord(request.resource.data);
+      allow update: if isDocOwner() && uidNotModified() && isValidDietRecord(request.resource.data) && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isDocOwner();
+    }
+
+    match /meal_plans/{planId} {
+      allow read: if isDocOwner() || (isAuthenticated() && request.auth.uid == request.query.userId);
+      allow create: if isAuthenticated() && uidUnchanged() && isValidMealPlan(request.resource.data);
+      allow update: if isDocOwner() && uidNotModified() && isValidMealPlan(request.resource.data) && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isDocOwner();
+    }
+  }
+}

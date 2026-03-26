@@ -22,14 +22,14 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             <div className="flex items-center gap-4">
               <NavLink 
                 to="/settings"
-                className={({isActive}) => `p-2 rounded-full transition-all ${isActive ? 'bg-accent/10 text-accent' : 'text-secondary hover:text-primary hover:bg-surface-hover'}`}
+                className={({isActive}) => `p-2 rounded-full transition-all ${isActive ? 'bg-white/10 text-white' : 'text-white/70 hover:text-white hover:bg-white/10'}`}
               >
                  <Settings size={20} strokeWidth={1.5} />
               </NavLink>
 
               <button 
                 onClick={logout}
-                className="text-secondary hover:text-red-600 p-2 rounded-full hover:bg-red-50 transition-all"
+                className="text-white/70 hover:text-white p-2 rounded-full hover:bg-white/10 transition-all"
                 title="登出"
               >
                 <LogOut size={20} strokeWidth={1.5} />
