@@ -28,11 +28,29 @@ export interface DietRecord {
   createdAt: number;
 }
 
+export interface NutritionGoals {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+}
+
+export interface UserSettings {
+  gender?: 'male' | 'female';
+  age?: number;
+  height?: number; // cm
+  weight?: number; // kg
+  activityLevel?: 'sedentary' | 'light' | 'moderate' | 'active';
+  goal?: 'lose' | 'maintain' | 'gain';
+  nutritionGoals?: NutritionGoals;
+}
+
 export interface UserProfile {
   uid: string;
   displayName: string | null;
   email: string | null;
   photoURL: string | null;
+  settings?: UserSettings;
 }
 
 export interface WeeklyStats {
@@ -45,6 +63,8 @@ export interface WeeklyStats {
   highestCalDay: string;
   lowestCalDay: string;
   insight: string;
+  goalsMet?: number;
+  goalsMissed?: number;
 }
 
 export interface MealPlanItem {

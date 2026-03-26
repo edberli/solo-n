@@ -2,9 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getDietRecordsByRange } from '../services/dbService';
 import { getStartOfWeek } from '../utils';
-import { DietRecord, WeeklyStats } from '../types';
+import { DietRecord, WeeklyStats, NutritionGoals } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { ChevronLeft, ChevronRight, TrendingUp, Award, AlertCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, TrendingUp, Award, AlertCircle, Target, XCircle } from 'lucide-react';
 
 export const Reports: React.FC = () => {
   const { user } = useAuth();
@@ -78,6 +78,10 @@ export const Reports: React.FC = () => {
     let totalCarb = 0;
     let totalFat = 0;
     let recordedDays = 0;
+    let goalsMet = 0;
+    let goalsMissed = 0;
+
+    const userGoals = user?.settings?.nutritionGoals || { calories: 2000, protein: 150, carbs: 200, fat: 65 };
 
     const sortedDates = Object.keys(dailyTotals).sort((a,b) => new Date(a).getTime() - new Date(b).getTime());
 
@@ -98,6 +102,16 @@ export const Reports: React.FC = () => {
             totalFat += item.fat;
             recordedDays++;
             
+            // Goal tracking logic
+            const isCalorieOk = item.cal <= userGoals.calories + 200 && item.cal >= userGoals.calories - 500;
+            const isProteinOk = item.pro >= userGoals.protein * 0.8 && item.pro <= userGoals.protein * 1.2;
+            
+            if (isCalorieOk && isProteinOk) {
+                goalsMet++;
+            } else {
+                goalsMissed++;
+            }
+
             if (item.cal > maxCal) { maxCal = item.cal; maxDay = item.label; }
             if (item.cal < minCal) { minCal = item.cal; minDay = item.label; }
         }
@@ -122,7 +136,9 @@ export const Reports: React.FC = () => {
         avgCalories: recordedDays ? Math.round(totalCal / recordedDays) : 0,
         highestCalDay: maxDay || '-',
         lowestCalDay: minDay === Infinity.toString() ? '-' : minDay,
-        insight
+        insight,
+        goalsMet,
+        goalsMissed
     });
   };
 
@@ -153,7 +169,25 @@ export const Reports: React.FC = () => {
             <div className="grid grid-cols-2 gap-3">
                 <div className="glass-panel p-4 rounded-2xl flex flex-col justify-between h-24">
                     <div className="text-secondary text-[10px] uppercase tracking-widest flex items-center gap-2">
-                        <TrendingUp size={14} strokeWidth={1.5}/> Avg Calories
+                        <Target size={14} strokeWidth={1.5} className="text-emerald-500" /> 達標日數
+                    </div>
+                    <div>
+                        <span className="text-2xl font-light tracking-tight text-emerald-600">{stats.goalsMet || 0}</span>
+                        <span className="text-[10px] text-secondary tracking-widest ml-1">日</span>
+                    </div>
+                </div>
+                <div className="glass-panel p-4 rounded-2xl flex flex-col justify-between h-24">
+                    <div className="text-secondary text-[10px] uppercase tracking-widest flex items-center gap-2">
+                        <XCircle size={14} strokeWidth={1.5} className="text-red-500" /> 未達標日數
+                    </div>
+                    <div>
+                        <span className="text-2xl font-light tracking-tight text-red-500">{stats.goalsMissed || 0}</span>
+                        <span className="text-[10px] text-secondary tracking-widest ml-1">日</span>
+                    </div>
+                </div>
+                <div className="glass-panel p-4 rounded-2xl flex flex-col justify-between h-24">
+                    <div className="text-secondary text-[10px] uppercase tracking-widest flex items-center gap-2">
+                        <TrendingUp size={14} strokeWidth={1.5}/> 平均熱量
                     </div>
                     <div>
                         <span className="text-2xl font-light tracking-tight text-primary">{stats.avgCalories}</span>
@@ -162,28 +196,10 @@ export const Reports: React.FC = () => {
                 </div>
                 <div className="glass-panel p-4 rounded-2xl flex flex-col justify-between h-24">
                     <div className="text-secondary text-[10px] uppercase tracking-widest flex items-center gap-2">
-                        <Award size={14} strokeWidth={1.5}/> Total Protein
+                        <Award size={14} strokeWidth={1.5}/> 總蛋白質
                     </div>
                     <div>
                         <span className="text-2xl font-light tracking-tight text-accent">{stats.totalProtein}</span>
-                        <span className="text-[10px] text-secondary tracking-widest ml-1">G</span>
-                    </div>
-                </div>
-                <div className="glass-panel p-4 rounded-2xl flex flex-col justify-between h-24">
-                    <div className="text-secondary text-[10px] uppercase tracking-widest flex items-center gap-2">
-                        Total Carbs
-                    </div>
-                    <div>
-                        <span className="text-2xl font-light tracking-tight text-primary">{stats.totalCarbs}</span>
-                        <span className="text-[10px] text-secondary tracking-widest ml-1">G</span>
-                    </div>
-                </div>
-                <div className="glass-panel p-4 rounded-2xl flex flex-col justify-between h-24">
-                    <div className="text-secondary text-[10px] uppercase tracking-widest flex items-center gap-2">
-                        Total Fat
-                    </div>
-                    <div>
-                        <span className="text-2xl font-light tracking-tight text-primary">{stats.totalFat}</span>
                         <span className="text-[10px] text-secondary tracking-widest ml-1">G</span>
                     </div>
                 </div>

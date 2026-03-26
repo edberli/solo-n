@@ -1,7 +1,7 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { PlusCircle, Calendar, BarChart2, LogOut, Settings } from 'lucide-react';
+import { PlusCircle, Calendar, BarChart2, LogOut, Settings, User } from 'lucide-react';
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, logout } = useAuth();
@@ -20,13 +20,6 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           
           {user && (
             <div className="flex items-center gap-4">
-              <NavLink 
-                to="/settings"
-                className={({isActive}) => `p-2 rounded-full transition-all ${isActive ? 'bg-white/10 text-white' : 'text-white/70 hover:text-white hover:bg-white/10'}`}
-              >
-                 <Settings size={20} strokeWidth={1.5} />
-              </NavLink>
-
               <button 
                 onClick={logout}
                 className="text-white/70 hover:text-white p-2 rounded-full hover:bg-white/10 transition-all"
@@ -46,7 +39,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
       {/* Bottom Nav (Mobile) */}
       {user && (
-        <nav className="md:hidden fixed bottom-6 left-4 right-4 glass-panel rounded-full px-8 py-4 flex justify-between items-center z-50">
+        <nav className="md:hidden fixed bottom-6 left-4 right-4 glass-panel rounded-full px-6 py-4 flex justify-between items-center z-50">
           <NavLink 
             to="/" 
             className={({isActive}) => `flex flex-col items-center gap-1 transition-colors ${isActive ? 'text-accent' : 'text-secondary hover:text-primary'}`}
@@ -55,6 +48,13 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           </NavLink>
           
           <NavLink 
+            to="/stats" 
+            className={({isActive}) => `flex flex-col items-center gap-1 transition-colors ${isActive ? 'text-accent' : 'text-secondary hover:text-primary'}`}
+          >
+            <BarChart2 size={22} strokeWidth={1.5} />
+          </NavLink>
+
+          <NavLink 
             to="/add" 
             className="flex flex-col items-center justify-center -mt-8 bg-accent text-bg-dark w-14 h-14 rounded-full shadow-glow transition-transform active:scale-95"
           >
@@ -62,10 +62,17 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           </NavLink>
 
           <NavLink 
-            to="/stats" 
+            to="/profile" 
             className={({isActive}) => `flex flex-col items-center gap-1 transition-colors ${isActive ? 'text-accent' : 'text-secondary hover:text-primary'}`}
           >
-            <BarChart2 size={22} strokeWidth={1.5} />
+            <User size={22} strokeWidth={1.5} />
+          </NavLink>
+
+          <NavLink 
+            to="/settings" 
+            className={({isActive}) => `flex flex-col items-center gap-1 transition-colors ${isActive ? 'text-accent' : 'text-secondary hover:text-primary'}`}
+          >
+            <Settings size={22} strokeWidth={1.5} />
           </NavLink>
         </nav>
       )}

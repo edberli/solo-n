@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged, User } from "firebase/auth";
-import { getFirestore, collection, addDoc, query, where, getDocs, Timestamp, orderBy, limit, deleteDoc, doc } from "firebase/firestore";
+import { getFirestore, collection, addDoc, query, where, getDocs, Timestamp, orderBy, limit, deleteDoc, doc, getDoc, setDoc } from "firebase/firestore";
 import { getStorage, ref, uploadString, getDownloadURL } from "firebase/storage";
 import { IS_DEMO_MODE } from "../constants";
 import { DietRecord, UserProfile } from "../types";
@@ -263,18 +263,31 @@ export const subscribeToAuth = (callback: (user: UserProfile | null) => void) =>
   const mode = localStorage.getItem('auth_mode');
 
   if (mode === 'guest') {
-    callback(GUEST_USER);
+    const guestSettingsStr = localStorage.getItem('guest_settings');
+    const guestSettings = guestSettingsStr ? JSON.parse(guestSettingsStr) : undefined;
+    callback({ ...GUEST_USER, settings: guestSettings });
     return () => {};
   }
 
   if (auth) {
-    return onAuthStateChanged(auth, (user: User | null) => {
+    return onAuthStateChanged(auth, async (user: User | null) => {
       if (user) {
+        let settings = undefined;
+        try {
+          const userDoc = await getDoc(doc(db, 'users', user.uid));
+          if (userDoc.exists()) {
+            settings = userDoc.data().settings;
+          }
+        } catch (e) {
+          console.error("Failed to fetch user settings", e);
+        }
+
         callback({
           uid: user.uid,
           displayName: user.displayName,
           email: user.email,
-          photoURL: user.photoURL
+          photoURL: user.photoURL,
+          settings
         });
       } else {
         callback(null);
@@ -284,6 +297,23 @@ export const subscribeToAuth = (callback: (user: UserProfile | null) => void) =>
 
   callback(null);
   return () => {};
+};
+
+export const updateUserSettings = async (userId: string, settings: any): Promise<void> => {
+  const mode = localStorage.getItem('auth_mode');
+  if (mode === 'guest') {
+    localStorage.setItem('guest_settings', JSON.stringify(settings));
+    return;
+  }
+
+  if (IS_DEMO_MODE || !db) return;
+
+  try {
+    const userRef = doc(db, 'users', userId);
+    await setDoc(userRef, { settings }, { merge: true });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `users/${userId}`);
+  }
 };
 
 // --- Data Functions ---

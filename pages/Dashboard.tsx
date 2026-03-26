@@ -4,6 +4,7 @@ import { getDietRecordsByDate, getMonthlyStats, deleteDietRecord } from '../serv
 import { DietRecord, MealType } from '../types';
 import { formatHKDate } from '../utils';
 import { ChevronLeft, ChevronRight, Loader2, AlertCircle, Calendar as CalendarIcon, X, Trash2, Clock, Info, Check, ChevronDown } from 'lucide-react';
+import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 
 // Helper for styles based on MealType
 const getMealStyles = (type: MealType) => {
@@ -133,6 +134,78 @@ export const Dashboard: React.FC = () => {
   const totalCarbs = records.reduce((acc, r) => acc + (r.nutrition.carbs || 0), 0);
   const totalFat = records.reduce((acc, r) => acc + (r.nutrition.fat || 0), 0);
 
+  const carbCals = totalCarbs * 4;
+  const proteinCals = totalProtein * 4;
+  const fatCals = totalFat * 9;
+  const totalMacroCals = carbCals + proteinCals + fatCals;
+
+  const carbPct = totalMacroCals ? Math.round((carbCals / totalMacroCals) * 100) : 0;
+  const proteinPct = totalMacroCals ? Math.round((proteinCals / totalMacroCals) * 100) : 0;
+  const fatPct = totalMacroCals ? Math.round((fatCals / totalMacroCals) * 100) : 0;
+
+  const pieData = [
+    { name: 'Carbs', value: carbCals || 1, fill: '#ef4444' },
+    { name: 'Protein', value: proteinCals || 1, fill: '#3b82f6' },
+    { name: 'Fat', value: fatCals || 1, fill: '#10b981' }
+  ];
+  
+  if (totalMacroCals === 0) {
+    pieData.forEach(d => d.fill = '#e5e7eb');
+  }
+
+  // Generate Feedback
+  const generateFeedback = () => {
+    if (records.length === 0) return null;
+
+    const goals = user?.settings?.nutritionGoals || { calories: 2000, protein: 150, carbs: 200, fat: 65 };
+    let feedback = [];
+
+    if (totalCalories > goals.calories + 200) {
+      feedback.push('今日卡路里已超標');
+    } else if (totalCalories < goals.calories - 500) {
+      feedback.push('今日熱量攝取不足');
+    }
+
+    if (totalProtein < goals.protein * 0.8) {
+      feedback.push('蛋白質唔夠');
+    } else if (totalProtein > goals.protein * 1.2) {
+      feedback.push('蛋白質攝取偏高');
+    }
+
+    if (totalCarbs > goals.carbs * 1.2) {
+      feedback.push('澱粉質有啲高');
+    }
+
+    if (feedback.length === 0) {
+      return '今日飲食控制得好好！繼續保持！';
+    }
+
+    return feedback.join('，') + '。';
+  };
+
+  const dailyFeedback = generateFeedback();
+
+  const goals = user?.settings?.nutritionGoals || { calories: 2000, protein: 150, carbs: 200, fat: 65 };
+  
+  const calRatio = totalCalories / goals.calories;
+  let calColor = 'bg-slate-700';
+  let calTextColor = 'text-slate-700';
+  let calText = '攝取不足';
+  
+  if (calRatio >= 0.85 && calRatio <= 1.1) {
+    calColor = 'bg-emerald-500';
+    calTextColor = 'text-emerald-600';
+    calText = '達標範圍';
+  } else if (calRatio > 1.1) {
+    calColor = 'bg-red-500';
+    calTextColor = 'text-red-500';
+    calText = '超出目標';
+  }
+
+  const carbRatio = totalCarbs / goals.carbs;
+  const proRatio = totalProtein / goals.protein;
+  const fatRatio = totalFat / goals.fat;
+
   // Calendar
   const renderCalendar = () => {
     const year = calendarMonth.getFullYear();
@@ -232,23 +305,135 @@ export const Dashboard: React.FC = () => {
       )}
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="bg-[#b3121C] text-white p-4 rounded-2xl flex flex-col justify-between h-24">
-          <p className="font-medium text-[10px] uppercase tracking-widest text-white/80">Calories</p>
-          <p className="text-2xl font-light tracking-tight text-white">{Math.round(totalCalories)} <span className="text-[10px] font-medium text-white/80 tracking-widest">KCAL</span></p>
+      <div className="glass-panel p-5 rounded-2xl flex flex-col items-center">
+        <h3 className="text-sm font-medium text-primary tracking-widest mb-6 uppercase">熱量及三大營養素</h3>
+        
+        <div className="flex items-center justify-between w-full max-w-sm">
+          {/* Donut Chart */}
+          <div className="relative w-32 h-32 flex-shrink-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={pieData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={45}
+                  outerRadius={60}
+                  paddingAngle={2}
+                  dataKey="value"
+                  stroke="none"
+                  cornerRadius={4}
+                  isAnimationActive={false}
+                >
+                  {pieData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.fill} />
+                  ))}
+                </Pie>
+              </PieChart>
+            </ResponsiveContainer>
+            {/* Center Text */}
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+              <span className="text-xl font-bold text-primary">{Math.round(totalCalories)}</span>
+              <span className="text-[10px] text-secondary">大卡</span>
+            </div>
+          </div>
+
+          {/* Legend */}
+          <div className="flex flex-col gap-4 flex-1 ml-6">
+            {/* Carbs */}
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-[#ef4444]"></div>
+                  <span className="text-sm text-secondary font-medium">醣類</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-[#ef4444] font-medium w-8 text-right">{carbPct}%</span>
+                  <span className="text-sm text-primary font-medium w-10 text-right">{Math.round(totalCarbs)}g</span>
+                </div>
+              </div>
+              <div className="h-1.5 w-full bg-surface-hover rounded-full overflow-hidden">
+                <div className="h-full bg-[#ef4444] transition-all" style={{ width: `${Math.min(carbRatio * 100, 100)}%` }}></div>
+              </div>
+            </div>
+            {/* Protein */}
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-[#3b82f6]"></div>
+                  <span className="text-sm text-secondary font-medium">蛋白質</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-[#3b82f6] font-medium w-8 text-right">{proteinPct}%</span>
+                  <span className="text-sm text-primary font-medium w-10 text-right">{Math.round(totalProtein)}g</span>
+                </div>
+              </div>
+              <div className="h-1.5 w-full bg-surface-hover rounded-full overflow-hidden">
+                <div className="h-full bg-[#3b82f6] transition-all" style={{ width: `${Math.min(proRatio * 100, 100)}%` }}></div>
+              </div>
+            </div>
+            {/* Fat */}
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-[#10b981]"></div>
+                  <span className="text-sm text-secondary font-medium">脂質</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-[#10b981] font-medium w-8 text-right">{fatPct}%</span>
+                  <span className="text-sm text-primary font-medium w-10 text-right">{Math.round(totalFat)}g</span>
+                </div>
+              </div>
+              <div className="h-1.5 w-full bg-surface-hover rounded-full overflow-hidden">
+                <div className="h-full bg-[#10b981] transition-all" style={{ width: `${Math.min(fatRatio * 100, 100)}%` }}></div>
+              </div>
+            </div>
+          </div>
         </div>
-        <div className="glass-panel p-4 rounded-2xl flex flex-col justify-between h-24 border-l-2 border-l-secondary">
-          <p className="font-medium text-[10px] uppercase tracking-widest text-secondary">Protein</p>
-          <p className="text-2xl font-light tracking-tight text-primary">{Math.round(totalProtein)} <span className="text-[10px] font-medium text-secondary tracking-widest">G</span></p>
+
+        {/* Calorie Progress Bar */}
+        <div className="mt-8 w-full max-w-sm">
+          <div className="flex justify-between items-end mb-2">
+            <span className="text-xs text-secondary font-medium tracking-widest">卡路里目標</span>
+            <span className={`text-xs font-bold ${calTextColor}`}>{calText}</span>
+          </div>
+          <div className="h-2.5 w-full bg-surface-hover rounded-full overflow-hidden relative">
+            {/* Target Markers */}
+            <div className="absolute top-0 bottom-0 left-[85%] w-0.5 bg-white/50 z-10"></div>
+            <div className="absolute top-0 bottom-0 left-[100%] w-0.5 bg-white/50 z-10"></div>
+            {/* Progress Fill */}
+            <div 
+              className={`h-full transition-all duration-500 ${calColor}`} 
+              style={{ width: `${Math.min(calRatio * 100, 100)}%` }}
+            ></div>
+          </div>
+          <div className="flex justify-between mt-2">
+            <span className="text-[10px] text-secondary">{Math.round(totalCalories)} kcal</span>
+            <span className="text-[10px] text-secondary">目標: {goals.calories} kcal</span>
+          </div>
         </div>
-        <div className="glass-panel p-4 rounded-2xl flex flex-col justify-between h-24 border-l-2 border-l-secondary">
-          <p className="font-medium text-[10px] uppercase tracking-widest text-secondary">Carbs</p>
-          <p className="text-2xl font-light tracking-tight text-primary">{Math.round(totalCarbs)} <span className="text-[10px] font-medium text-secondary tracking-widest">G</span></p>
+
+        {/* Bottom Pill */}
+        <div className="mt-6 bg-surface px-5 py-2.5 rounded-full flex items-center justify-center gap-6 text-xs text-secondary border border-border-color shadow-sm w-full max-w-sm">
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-[#ef4444]"></div>
+            <span className="tracking-wider">精緻糖 <span className="font-medium text-primary">0公克</span></span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-[#10b981]"></div>
+            <span className="tracking-wider">膳食纖維 <span className="font-medium text-primary">0公克</span></span>
+          </div>
         </div>
-        <div className="glass-panel p-4 rounded-2xl flex flex-col justify-between h-24 border-l-2 border-l-secondary">
-          <p className="font-medium text-[10px] uppercase tracking-widest text-secondary">Fat</p>
-          <p className="text-2xl font-light tracking-tight text-primary">{Math.round(totalFat)} <span className="text-[10px] font-medium text-secondary tracking-widest">G</span></p>
-        </div>
+
+        {/* Feedback */}
+        {dailyFeedback && (
+          <div className="mt-4 w-full max-w-sm bg-blue-50/50 border border-blue-100 p-3 rounded-xl flex items-start gap-3">
+            <Info size={16} className="text-blue-500 mt-0.5 flex-shrink-0" />
+            <p className="text-sm text-blue-800 tracking-wide leading-relaxed">
+              {dailyFeedback}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* List */}

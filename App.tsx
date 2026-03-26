@@ -28,6 +28,8 @@ const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   return <>{children}</>;
 };
 
+import Profile from './pages/Profile';
+
 const AppRoutes = () => {
     const { user } = useAuth();
     return (
@@ -62,6 +64,14 @@ const AppRoutes = () => {
             element={
                 <PrivateRoute>
                 <Settings />
+                </PrivateRoute>
+            } 
+            />
+            <Route 
+            path="/profile" 
+            element={
+                <PrivateRoute>
+                <Profile />
                 </PrivateRoute>
             } 
             />
