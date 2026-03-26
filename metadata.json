@@ -1,0 +1,7 @@
+{
+  "name": "Solo Nutrition",
+  "description": "A minimalist, Japanese-style smart nutrition tracker powered by Gemini.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
