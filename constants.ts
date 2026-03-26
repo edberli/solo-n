@@ -6,28 +6,10 @@ export const IS_DEMO_MODE = !firebaseConfig.apiKey;
 
 export const HK_TIMEZONE = 'Asia/Hong_Kong';
 
-export const AI_PROVIDERS = {
-  GEMINI: 'gemini',
-  BAILIAN: 'bailian',
-  MOONSHOT: 'moonshot'
-};
-
 export const AI_MODELS = {
   GEMINI: {
     FAST: 'gemini-3-flash-preview',
     PRO: 'gemini-3-pro-preview', 
-  },
-  BAILIAN: {
-    FAST: 'qwen-plus',
-    PRO: 'qwen-max',
-    VL_FAST: 'qwen-vl-plus',
-    VL_PRO: 'qwen-vl-max'
-  },
-  MOONSHOT: {
-    FAST: 'moonshot-v1-8k',
-    PRO: 'kimi-k2.5',
-    VL_FAST: 'moonshot-v1-8k-vision-preview',
-    VL_PRO: 'kimi-k2.5'
   }
 };
 

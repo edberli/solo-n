@@ -1,7 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { AI_MODELS, AI_PROVIDERS } from "../constants";
+import { AI_MODELS } from "../constants";
 import { NutritionData, MealType } from "../types";
-import { getAIConfig } from "./aiConfigService";
 
 interface AnalysisResult {
   nutrition: NutritionData;
@@ -18,8 +17,6 @@ export const analyzeFood = async (
   dateTimeContext?: string,
   mode: 'fast' | 'pro' = 'fast'
 ): Promise<AnalysisResult[]> => {
-
-  const config = getAIConfig();
 
   const promptText = `
     你是一位專精於香港飲食數據的「AI 營養審計員」。
@@ -65,24 +62,9 @@ export const analyzeFood = async (
 
   let parsedResults: any[] = [];
 
-  if (config.provider === AI_PROVIDERS.BAILIAN) {
-    if (!config.bailianApiKey) {
-      throw new Error("Missing Bailian API Key in settings.");
-    }
-    parsedResults = await callBailian(promptText, textDescription, imageBase64, mode, config.bailianApiKey, config.bailianBaseUrl || 'https://dashscope.aliyuncs.com/compatible-mode/v1');
-  } else if (config.provider === AI_PROVIDERS.MOONSHOT) {
-    if (!config.moonshotApiKey) {
-      throw new Error("Missing Moonshot API Key in settings.");
-    }
-    parsedResults = await callMoonshot(promptText, textDescription, imageBase64, mode, config.moonshotApiKey, config.moonshotBaseUrl || 'https://api.moonshot.cn/v1', config.moonshotModel);
-  } else {
-    // Default to Gemini
-    const geminiKey = config.geminiApiKey || process.env.GEMINI_API_KEY;
-    if (!geminiKey) {
-      throw new Error("Missing Gemini API Key in settings.");
-    }
-    parsedResults = await callGemini(promptText, textDescription, imageBase64, mode, geminiKey);
-  }
+  // Default to Gemini with hardcoded API key
+  const geminiKey = 'AIzaSyArWNq_Uki7iU44AzEv33lDKaun7gGvwSQ';
+  parsedResults = await callGemini(promptText, textDescription, imageBase64, mode, geminiKey);
 
   return parsedResults.map((result: any) => ({
     foodName: result.foodName || "未知食物",
@@ -164,156 +146,6 @@ const callGemini = async (promptText: string, textDescription: string, imageBase
   }
 
   return JSON.parse(response.text);
-};
-
-const callBailian = async (promptText: string, textDescription: string, imageBase64: string | undefined, mode: 'fast' | 'pro', apiKey: string, baseUrl: string) => {
-  const modelName = imageBase64 
-    ? (mode === 'pro' ? AI_MODELS.BAILIAN.VL_PRO : AI_MODELS.BAILIAN.VL_FAST)
-    : (mode === 'pro' ? AI_MODELS.BAILIAN.PRO : AI_MODELS.BAILIAN.FAST);
-
-  const messages: any[] = [
-    {
-      role: "system",
-      content: "你是一位專精於香港飲食數據的「AI 營養審計員」。請只回傳符合格式的 JSON 陣列，不要包含任何其他文字或 Markdown 標記。"
-    }
-  ];
-
-  const content: any[] = [
-    { type: "text", text: promptText }
-  ];
-
-  if (textDescription) {
-    content.push({ type: "text", text: `使用者描述: ${textDescription}` });
-  }
-
-  if (imageBase64) {
-    const base64Data = imageBase64.includes('base64,') ? imageBase64 : `data:image/jpeg;base64,${imageBase64}`;
-    content.push({
-      type: "image_url",
-      image_url: { url: base64Data }
-    });
-  }
-
-  messages.push({
-    role: "user",
-    content: content
-  });
-
-  const normalizedBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-  
-  const response = await fetch(`${normalizedBaseUrl}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${apiKey.trim()}`
-    },
-    body: JSON.stringify({
-      model: modelName,
-      messages: messages,
-      temperature: 0.1
-    })
-  });
-
-  if (!response.ok) {
-    const err = await response.json();
-    throw new Error(`Bailian API Error: ${err.error?.message || response.statusText}`);
-  }
-
-  const data = await response.json();
-  let text = data.choices[0].message.content;
-  
-  text = text.replace(/```json/g, '').replace(/```/g, '').trim();
-  
-  let parsed = JSON.parse(text);
-  if (!Array.isArray(parsed)) {
-      const keys = Object.keys(parsed);
-      for (const key of keys) {
-          if (Array.isArray(parsed[key])) {
-              parsed = parsed[key];
-              break;
-          }
-      }
-      if (!Array.isArray(parsed)) {
-          parsed = [parsed];
-      }
-  }
-
-  return parsed;
-};
-
-const callMoonshot = async (promptText: string, textDescription: string, imageBase64: string | undefined, mode: 'fast' | 'pro', apiKey: string, baseUrl: string, customModel?: string) => {
-  const modelName = customModel || (imageBase64 
-    ? (mode === 'pro' ? AI_MODELS.MOONSHOT.VL_PRO : AI_MODELS.MOONSHOT.VL_FAST)
-    : (mode === 'pro' ? AI_MODELS.MOONSHOT.PRO : AI_MODELS.MOONSHOT.FAST));
-
-  const messages: any[] = [
-    {
-      role: "system",
-      content: "你是一位專精於香港飲食數據的「AI 營養審計員」。請只回傳符合格式的 JSON 陣列，不要包含任何其他文字或 Markdown 標記。"
-    }
-  ];
-
-  const content: any[] = [
-    { type: "text", text: promptText }
-  ];
-
-  if (textDescription) {
-    content.push({ type: "text", text: `使用者描述: ${textDescription}` });
-  }
-
-  if (imageBase64) {
-    const base64Data = imageBase64.includes('base64,') ? imageBase64 : `data:image/jpeg;base64,${imageBase64}`;
-    content.push({
-      type: "image_url",
-      image_url: { url: base64Data }
-    });
-  }
-
-  messages.push({
-    role: "user",
-    content: content
-  });
-
-  const normalizedBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-  
-  const response = await fetch(`${normalizedBaseUrl}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${apiKey.trim()}`
-    },
-    body: JSON.stringify({
-      model: modelName,
-      messages: messages,
-      temperature: 1
-    })
-  });
-
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(`Moonshot API Error: ${err.error?.message || response.statusText}`);
-  }
-
-  const data = await response.json();
-  let text = data.choices[0].message.content;
-  
-  text = text.replace(/```json/g, '').replace(/```/g, '').trim();
-  
-  let parsed = JSON.parse(text);
-  if (!Array.isArray(parsed)) {
-      const keys = Object.keys(parsed);
-      for (const key of keys) {
-          if (Array.isArray(parsed[key])) {
-              parsed = parsed[key];
-              break;
-          }
-      }
-      if (!Array.isArray(parsed)) {
-          parsed = [parsed];
-      }
-  }
-
-  return parsed;
 };
 
 export const generateWeeklyInsights = async (records: any[]): Promise<string> => {

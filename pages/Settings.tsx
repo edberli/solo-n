@@ -2,9 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { exportLocalData, importLocalData, clearLocalData, getDietRecordsByRange } from '../services/dbService';
 import { getSheetConfig, saveSheetConfig, syncToAppsScript, SheetConfig, GAS_CODE_SNIPPET } from '../services/googleSheetsService';
-import { getAIConfig, saveAIConfig, AIConfig } from '../services/aiConfigService';
-import { AI_PROVIDERS } from '../constants';
-import { Download, Upload, Trash2, CheckCircle, AlertTriangle, FileJson, Table, Loader2, Copy, Play, Check, BrainCircuit } from 'lucide-react';
+import { Download, Upload, Trash2, CheckCircle, AlertTriangle, FileJson, Table, Loader2, Copy, Play, Check } from 'lucide-react';
 
 export const Settings: React.FC = () => {
   const { user } = useAuth();
@@ -16,26 +14,12 @@ export const Settings: React.FC = () => {
   const [isEditingConfig, setIsEditingConfig] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
 
-  // AI Config State
-  const [aiConfig, setAiConfig] = useState<AIConfig>({ provider: AI_PROVIDERS.GEMINI, geminiApiKey: '', bailianApiKey: '' });
-  const [isEditingAiConfig, setIsEditingAiConfig] = useState(false);
-
   const isGuest = user?.uid === 'guest-user';
 
   useEffect(() => {
     const saved = getSheetConfig();
     if (saved) setSheetConfig(saved);
-    
-    const savedAi = getAIConfig();
-    if (savedAi) setAiConfig(savedAi);
   }, []);
-
-  // --- AI Config Handlers ---
-  const handleSaveAiConfig = () => {
-    saveAIConfig(aiConfig);
-    setIsEditingAiConfig(false);
-    setMsg({ type: 'success', text: 'AI configuration saved.' });
-  };
 
   // --- Local Backup Handlers ---
   const handleExport = async () => {
@@ -177,145 +161,6 @@ export const Settings: React.FC = () => {
               {msg.text}
           </div>
       )}
-
-      {/* AI Configuration */}
-      <div className="glass-panel p-6 rounded-2xl relative overflow-hidden">
-         <div className="absolute -top-4 -right-4 p-2 opacity-5 text-accent">
-             <BrainCircuit size={120} strokeWidth={1} />
-         </div>
-
-         <div className="flex items-center gap-4 mb-6 relative z-10">
-            <div className="bg-surface p-3 rounded-xl text-accent border border-border-color">
-                <BrainCircuit size={20} strokeWidth={1.5} />
-            </div>
-            <div>
-                <h3 className="font-medium text-primary tracking-widest uppercase text-sm">AI Model</h3>
-                <p className="text-[10px] text-secondary tracking-wider mt-1">Select your preferred AI provider</p>
-            </div>
-        </div>
-
-        {!isEditingAiConfig ? (
-            <div className="space-y-4 relative z-10">
-                <div className="text-xs bg-surface p-4 rounded-xl border border-border-color text-secondary font-light tracking-wide">
-                    <span className="font-medium text-primary uppercase tracking-widest text-[10px] mr-2">Current:</span> 
-                    {aiConfig.provider === AI_PROVIDERS.GEMINI ? 'Google Gemini' : aiConfig.provider === AI_PROVIDERS.BAILIAN ? 'Alibaba Bailian (Qwen)' : 'Moonshot (Kimi)'}
-                </div>
-                <div className="flex gap-3">
-                    <button 
-                        onClick={() => setIsEditingAiConfig(true)}
-                        className="w-full px-4 py-3 border border-border-color rounded-xl font-medium text-xs tracking-widest uppercase text-primary hover:bg-surface-hover transition-colors"
-                    >
-                        Configure
-                    </button>
-                </div>
-            </div>
-        ) : (
-            <div className="space-y-5 relative z-10 animate-fade-in">
-                
-                <div>
-                    <label className="block text-[10px] font-medium text-secondary uppercase tracking-widest mb-2">Provider</label>
-                    <select 
-                        value={aiConfig.provider}
-                        onChange={(e) => setAiConfig({...aiConfig, provider: e.target.value})}
-                        className="w-full bg-surface border border-border-color rounded-xl p-4 text-sm font-light text-primary focus:border-accent outline-none appearance-none"
-                    >
-                        <option value={AI_PROVIDERS.GEMINI}>Google Gemini</option>
-                        <option value={AI_PROVIDERS.BAILIAN}>Alibaba Bailian (Qwen)</option>
-                        <option value={AI_PROVIDERS.MOONSHOT}>Moonshot (Kimi)</option>
-                    </select>
-                </div>
-
-                {aiConfig.provider === AI_PROVIDERS.GEMINI && (
-                    <div>
-                        <label className="block text-[10px] font-medium text-secondary uppercase tracking-widest mb-2">Gemini API Key</label>
-                        <input 
-                            type="password" 
-                            value={aiConfig.geminiApiKey}
-                            onChange={(e) => setAiConfig({...aiConfig, geminiApiKey: e.target.value})}
-                            placeholder="AIzaSy..."
-                            className="w-full bg-surface border border-border-color rounded-xl p-4 text-sm font-mono text-primary focus:border-accent outline-none"
-                        />
-                        <p className="text-[10px] text-secondary mt-2 tracking-wider">Leave empty to use system default</p>
-                    </div>
-                )}
-
-                {aiConfig.provider === AI_PROVIDERS.BAILIAN && (
-                    <div className="space-y-4">
-                        <div>
-                            <label className="block text-[10px] font-medium text-secondary uppercase tracking-widest mb-2">Bailian API Key</label>
-                            <input 
-                                type="password" 
-                                value={aiConfig.bailianApiKey}
-                                onChange={(e) => setAiConfig({...aiConfig, bailianApiKey: e.target.value})}
-                                placeholder="sk-..."
-                                className="w-full bg-surface border border-border-color rounded-xl p-4 text-sm font-mono text-primary focus:border-accent outline-none"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-[10px] font-medium text-secondary uppercase tracking-widest mb-2">Base URL (Optional)</label>
-                            <input 
-                                type="text" 
-                                value={aiConfig.bailianBaseUrl || 'https://dashscope.aliyuncs.com/compatible-mode/v1'}
-                                onChange={(e) => setAiConfig({...aiConfig, bailianBaseUrl: e.target.value})}
-                                placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1"
-                                className="w-full bg-surface border border-border-color rounded-xl p-4 text-sm font-mono text-primary focus:border-accent outline-none"
-                            />
-                        </div>
-                    </div>
-                )}
-
-                {aiConfig.provider === AI_PROVIDERS.MOONSHOT && (
-                    <div className="space-y-4">
-                        <div>
-                            <label className="block text-[10px] font-medium text-secondary uppercase tracking-widest mb-2">Moonshot API Key</label>
-                            <input 
-                                type="password" 
-                                value={aiConfig.moonshotApiKey || ''}
-                                onChange={(e) => setAiConfig({...aiConfig, moonshotApiKey: e.target.value})}
-                                placeholder="sk-..."
-                                className="w-full bg-surface border border-border-color rounded-xl p-4 text-sm font-mono text-primary focus:border-accent outline-none"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-[10px] font-medium text-secondary uppercase tracking-widest mb-2">Base URL (Optional)</label>
-                            <input 
-                                type="text" 
-                                value={aiConfig.moonshotBaseUrl || 'https://api.moonshot.cn/v1'}
-                                onChange={(e) => setAiConfig({...aiConfig, moonshotBaseUrl: e.target.value})}
-                                placeholder="https://api.moonshot.cn/v1"
-                                className="w-full bg-surface border border-border-color rounded-xl p-4 text-sm font-mono text-primary focus:border-accent outline-none"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-[10px] font-medium text-secondary uppercase tracking-widest mb-2">Model (Optional)</label>
-                            <input 
-                                type="text" 
-                                value={aiConfig.moonshotModel || 'kimi-k2.5'}
-                                onChange={(e) => setAiConfig({...aiConfig, moonshotModel: e.target.value})}
-                                placeholder="kimi-k2.5"
-                                className="w-full bg-surface border border-border-color rounded-xl p-4 text-sm font-mono text-primary focus:border-accent outline-none"
-                            />
-                        </div>
-                    </div>
-                )}
-                
-                <div className="flex gap-3 pt-2">
-                     <button 
-                        onClick={() => setIsEditingAiConfig(false)}
-                        className="flex-1 py-4 text-secondary font-medium tracking-widest uppercase text-xs hover:bg-surface rounded-xl transition-colors"
-                    >
-                        Cancel
-                    </button>
-                    <button 
-                        onClick={handleSaveAiConfig}
-                        className="flex-1 bg-accent text-bg-dark py-4 rounded-xl font-medium tracking-widest uppercase text-xs hover:opacity-90 transition-opacity"
-                    >
-                        Save
-                    </button>
-                </div>
-            </div>
-        )}
-      </div>
 
       {/* Google Sheets Integration (Apps Script Method) */}
       <div className="glass-panel p-6 rounded-2xl relative overflow-hidden">
